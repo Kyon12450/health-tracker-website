@@ -1,49 +1,158 @@
-// Initialize data from localStorage
-let weightData = JSON.parse(localStorage.getItem('weightData')) || [];
-let calorieData = JSON.parse(localStorage.getItem('calorieData')) || [];
-
-// Set today's date as default
-document.getElementById('weightDate').valueAsDate = new Date();
-document.getElementById('calorieDate').valueAsDate = new Date();
-
-// Weight tracking functionality
-const weightForm = document.getElementById('weightForm');
-const weightList = document.getElementById('weightList');
+// Global variables
+let currentUser = null;
+let weightData = [];
+let calorieData = [];
 let weightChart = null;
 
-weightForm.addEventListener('submit', (e) => {
-    e.preventDefault();
+// UI Elements
+const loadingScreen = document.getElementById('loadingScreen');
+const authScreen = document.getElementById('authScreen');
+const mainApp = document.getElementById('mainApp');
+const googleSignInBtn = document.getElementById('googleSignInBtn');
+const signOutBtn = document.getElementById('signOutBtn');
+const userEmailDisplay = document.getElementById('userEmail');
 
-    const date = document.getElementById('weightDate').value;
-    const weight = parseFloat(document.getElementById('weight').value);
+// Wait for Firebase to be initialized
+setTimeout(() => {
+    initializeApp();
+}, 100);
 
-    // Check if entry for this date already exists
-    const existingIndex = weightData.findIndex(entry => entry.date === date);
+function initializeApp() {
+    // Set up authentication listener
+    window.onAuthStateChanged(window.firebaseAuth, (user) => {
+        if (user) {
+            // User is signed in
+            currentUser = user;
+            userEmailDisplay.textContent = user.email;
+            loadingScreen.style.display = 'none';
+            authScreen.style.display = 'none';
+            mainApp.style.display = 'block';
 
-    if (existingIndex !== -1) {
-        // Update existing entry
-        weightData[existingIndex].weight = weight;
-    } else {
-        // Add new entry
-        weightData.push({ date, weight });
-    }
+            // Set up data listeners
+            setupDataListeners();
+            initializeForms();
+        } else {
+            // User is signed out
+            currentUser = null;
+            loadingScreen.style.display = 'none';
+            authScreen.style.display = 'flex';
+            mainApp.style.display = 'none';
+        }
+    });
 
-    // Sort by date
-    weightData.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Google Sign In
+    googleSignInBtn.addEventListener('click', async () => {
+        try {
+            await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
+        } catch (error) {
+            console.error('Error signing in:', error);
+            alert('Failed to sign in. Please try again.');
+        }
+    });
 
-    // Save to localStorage
-    localStorage.setItem('weightData', JSON.stringify(weightData));
+    // Sign Out
+    signOutBtn.addEventListener('click', async () => {
+        try {
+            await window.signOut(window.firebaseAuth);
+        } catch (error) {
+            console.error('Error signing out:', error);
+        }
+    });
+}
 
-    // Reset form
-    weightForm.reset();
+function setupDataListeners() {
+    // Listen to weight data changes
+    const weightRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}/weight`);
+    window.firebaseOnValue(weightRef, (snapshot) => {
+        weightData = [];
+        snapshot.forEach((childSnapshot) => {
+            weightData.push({
+                id: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+        weightData.sort((a, b) => new Date(a.date) - new Date(b.date));
+        displayWeightData();
+        updateWeightChart();
+    });
+
+    // Listen to calorie data changes
+    const calorieRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}/calories`);
+    window.firebaseOnValue(calorieRef, (snapshot) => {
+        calorieData = [];
+        snapshot.forEach((childSnapshot) => {
+            calorieData.push({
+                id: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+        calorieData.sort((a, b) => {
+            const dateCompare = new Date(a.date) - new Date(b.date);
+            if (dateCompare !== 0) return dateCompare;
+            return new Date(a.timestamp) - new Date(b.timestamp);
+        });
+        displayCalorieData();
+        updateCalorieStats();
+    });
+}
+
+function initializeForms() {
+    // Set today's date as default
     document.getElementById('weightDate').valueAsDate = new Date();
+    document.getElementById('calorieDate').valueAsDate = new Date();
 
-    // Update display
-    displayWeightData();
-    updateWeightChart();
-});
+    // Weight form submission
+    const weightForm = document.getElementById('weightForm');
+    weightForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
+        const date = document.getElementById('weightDate').value;
+        const weight = parseFloat(document.getElementById('weight').value);
+
+        // Check if entry for this date already exists
+        const existingEntry = weightData.find(entry => entry.date === date);
+
+        if (existingEntry) {
+            // Update existing entry
+            const entryRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}/weight/${existingEntry.id}`);
+            await window.firebaseSet(entryRef, { date, weight });
+        } else {
+            // Add new entry
+            const weightRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}/weight`);
+            await window.firebasePush(weightRef, { date, weight });
+        }
+
+        // Reset form
+        weightForm.reset();
+        document.getElementById('weightDate').valueAsDate = new Date();
+    });
+
+    // Calorie form submission
+    const calorieForm = document.getElementById('calorieForm');
+    calorieForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const date = document.getElementById('calorieDate').value;
+        const calories = parseInt(document.getElementById('calories').value);
+        const note = document.getElementById('mealNote').value;
+
+        const calorieRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}/calories`);
+        await window.firebasePush(calorieRef, {
+            date,
+            calories,
+            note,
+            timestamp: new Date().toISOString()
+        });
+
+        // Reset form
+        calorieForm.reset();
+        document.getElementById('calorieDate').valueAsDate = new Date();
+    });
+}
+
+// Display weight data
 function displayWeightData() {
+    const weightList = document.getElementById('weightList');
     weightList.innerHTML = '';
 
     if (weightData.length === 0) {
@@ -52,8 +161,7 @@ function displayWeightData() {
     }
 
     // Display in reverse order (newest first)
-    [...weightData].reverse().forEach((entry, index) => {
-        const actualIndex = weightData.length - 1 - index;
+    [...weightData].reverse().forEach((entry) => {
         const entryDiv = document.createElement('div');
         entryDiv.className = 'entry';
         entryDiv.innerHTML = `
@@ -61,19 +169,21 @@ function displayWeightData() {
                 <div class="entry-date">${formatDate(entry.date)}</div>
                 <div class="entry-value">${entry.weight} kg</div>
             </div>
-            <button class="delete-btn" onclick="deleteWeight(${actualIndex})">Delete</button>
+            <button class="delete-btn" onclick="deleteWeight('${entry.id}')">Delete</button>
         `;
         weightList.appendChild(entryDiv);
     });
 }
 
-function deleteWeight(index) {
-    weightData.splice(index, 1);
-    localStorage.setItem('weightData', JSON.stringify(weightData));
-    displayWeightData();
-    updateWeightChart();
-}
+// Delete weight entry
+window.deleteWeight = async function(id) {
+    if (confirm('Are you sure you want to delete this entry?')) {
+        const entryRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}/weight/${id}`);
+        await window.firebaseRemove(entryRef);
+    }
+};
 
+// Update weight chart
 function updateWeightChart() {
     const ctx = document.getElementById('weightChart').getContext('2d');
 
@@ -130,46 +240,9 @@ function updateWeightChart() {
     });
 }
 
-// Calorie tracking functionality
-const calorieForm = document.getElementById('calorieForm');
-const calorieList = document.getElementById('calorieList');
-const totalCaloriesDisplay = document.getElementById('totalCalories');
-const todayCaloriesDisplay = document.getElementById('todayCalories');
-
-calorieForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    const date = document.getElementById('calorieDate').value;
-    const calories = parseInt(document.getElementById('calories').value);
-    const note = document.getElementById('mealNote').value;
-
-    calorieData.push({
-        date,
-        calories,
-        note,
-        timestamp: new Date().toISOString()
-    });
-
-    // Sort by date and timestamp
-    calorieData.sort((a, b) => {
-        const dateCompare = new Date(a.date) - new Date(b.date);
-        if (dateCompare !== 0) return dateCompare;
-        return new Date(a.timestamp) - new Date(b.timestamp);
-    });
-
-    // Save to localStorage
-    localStorage.setItem('calorieData', JSON.stringify(calorieData));
-
-    // Reset form
-    calorieForm.reset();
-    document.getElementById('calorieDate').valueAsDate = new Date();
-
-    // Update display
-    displayCalorieData();
-    updateCalorieStats();
-});
-
+// Display calorie data
 function displayCalorieData() {
+    const calorieList = document.getElementById('calorieList');
     calorieList.innerHTML = '';
 
     if (calorieData.length === 0) {
@@ -178,8 +251,7 @@ function displayCalorieData() {
     }
 
     // Display in reverse order (newest first)
-    [...calorieData].reverse().forEach((entry, index) => {
-        const actualIndex = calorieData.length - 1 - index;
+    [...calorieData].reverse().forEach((entry) => {
         const entryDiv = document.createElement('div');
         entryDiv.className = 'entry';
         entryDiv.innerHTML = `
@@ -188,20 +260,25 @@ function displayCalorieData() {
                 <div class="entry-value">${entry.calories} cal</div>
                 ${entry.note ? `<div class="entry-note">${entry.note}</div>` : ''}
             </div>
-            <button class="delete-btn" onclick="deleteCalorie(${actualIndex})">Delete</button>
+            <button class="delete-btn" onclick="deleteCalorie('${entry.id}')">Delete</button>
         `;
         calorieList.appendChild(entryDiv);
     });
 }
 
-function deleteCalorie(index) {
-    calorieData.splice(index, 1);
-    localStorage.setItem('calorieData', JSON.stringify(calorieData));
-    displayCalorieData();
-    updateCalorieStats();
-}
+// Delete calorie entry
+window.deleteCalorie = async function(id) {
+    if (confirm('Are you sure you want to delete this entry?')) {
+        const entryRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}/calories/${id}`);
+        await window.firebaseRemove(entryRef);
+    }
+};
 
+// Update calorie statistics
 function updateCalorieStats() {
+    const totalCaloriesDisplay = document.getElementById('totalCalories');
+    const todayCaloriesDisplay = document.getElementById('todayCalories');
+
     // Calculate total calories
     const totalCalories = calorieData.reduce((sum, entry) => sum + entry.calories, 0);
     totalCaloriesDisplay.textContent = totalCalories.toLocaleString();
@@ -223,9 +300,3 @@ function formatDate(dateString) {
         day: 'numeric'
     });
 }
-
-// Initialize displays on page load
-displayWeightData();
-updateWeightChart();
-displayCalorieData();
-updateCalorieStats();

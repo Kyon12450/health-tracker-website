@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Personal Health Tracker</h1>
+        </header>
+
+        <div class="tracker-section">
+            <div class="card">
+                <h2>Weight Tracker</h2>
+                <form id="weightForm">
+                    <div class="form-group">
+                        <label for="weightDate">Date:</label>
+                        <input type="date" id="weightDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="weight">Weight (kg):</label>
+                        <input type="number" id="weight" step="0.1" required>
+                    </div>
+                    <button type="submit" class="btn">Add Weight</button>
+                </form>
+
+                <div class="chart-container">
+                    <canvas id="weightChart"></canvas>
+                </div>
+
+                <div class="data-list">
+                    <h3>Weight History</h3>
+                    <div id="weightList"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Calorie Tracker</h2>
+                <form id="calorieForm">
+                    <div class="form-group">
+                        <label for="calorieDate">Date:</label>
+                        <input type="date" id="calorieDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="calories">Calories:</label>
+                        <input type="number" id="calories" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="mealNote">Note (optional):</label>
+                        <input type="text" id="mealNote" placeholder="e.g., Breakfast, Lunch">
+                    </div>
+                    <button type="submit" class="btn">Add Calories</button>
+                </form>
+
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>Total Calories (All Time)</h3>
+                        <div id="totalCalories" class="stat-value">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Today's Calories</h3>
+                        <div id="todayCalories" class="stat-value">0</div>
+                    </div>
+                </div>
+
+                <div class="data-list">
+                    <h3>Calorie History</h3>
+                    <div id="calorieList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

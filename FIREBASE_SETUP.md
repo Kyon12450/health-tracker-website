@@ -104,6 +104,8 @@ const firebaseConfig = {
 
 4. Save the file
 
+**Security Note:** Firebase API keys are safe to include in your code and commit to GitHub. They're designed to be public. See [SECURITY.md](SECURITY.md) for details.
+
 ### Step 7: Configure Authorized Domains (for GitHub Pages)
 
 1. In Firebase Console, go to "Authentication" > "Settings" tab

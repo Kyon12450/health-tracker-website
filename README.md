@@ -133,6 +133,8 @@ Tested on: Chrome, Firefox, Safari, Edge
 - **HTTPS**: All data transmitted securely over HTTPS
 - **No Third-Party Access**: Your health data is never shared
 
+**Note:** The Firebase API key in the code is safe to expose publicly. See [SECURITY.md](SECURITY.md) for detailed security information.
+
 ## Cost
 
 Everything is **100% FREE**:
